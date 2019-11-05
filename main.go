@@ -1,5 +1,7 @@
 package main
 
+// Using https://flaviocopes.com/golang-sql-database/
+
 import (
 	"bufio"
 	"database/sql"
@@ -10,6 +12,12 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	chalk "github.com/logrusorgru/aurora"
 )
+
+type createDetails struct {
+	username string
+	password string
+	DbName   string
+}
 
 func main() {
 	fmt.Println()
@@ -23,6 +31,8 @@ func main() {
 	fmt.Println("Database connected succesfully")
 
 	getUsers(db)
+	// ToDo: Get databases
+
 	username := getUsername()
 	password := getPassword()
 	DbName := getDbName()
@@ -31,15 +41,44 @@ func main() {
 	fmt.Println(chalk.Green("Your db Name will be: "), chalk.Cyan(password))
 	fmt.Println(chalk.Green("Your db Name will be: "), chalk.Cyan(DbName))
 
+	details := createDetails{username: username, password: password, DbName: DbName}
+
+	createDatabase(details, db)
+
 	// check the users
 	// check the databases
 	// Get some inputs
+
+	fmt.Printf("\nSuccessfully created database: %v and user %v", username, password)
 
 	defer db.Close()
 
 }
 
+func createDatabase(details createDetails, db *sql.DB) {
+	sqlStatement := fmt.Sprintf("CREATE DATABASE %v;", details.DbName)
+	execDbQuery(sqlStatement, db)
+
+	sqlStatement = fmt.Sprintf("CREATE USER '%v'@'localhost' IDENTIFIED BY '%v';", details.username, details.password)
+	execDbQuery(sqlStatement, db)
+
+	sqlStatement = fmt.Sprintf("GRANT ALL PRIVILEGES ON %v.* TO '%v'@'localhost';", details.DbName, details.username)
+	execDbQuery(sqlStatement, db)
+
+}
+
+func execDbQuery(query string, db *sql.DB) {
+	_, err := db.Exec(query)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func getUsers(db *sql.DB) {
+
+	type User struct {
+		username string
+	}
 
 	sqlStatement := `SELECT User FROM mysql.user;`
 	rows, err := db.Query(sqlStatement)
@@ -48,11 +87,20 @@ func getUsers(db *sql.DB) {
 	}
 	defer rows.Close()
 
+	fmt.Println(chalk.Green("\nCurrent MySQL Users:"))
 	for rows.Next() {
-		users := Users{}
-		// up to here with https://flaviocopes.com/golang-sql-database/
+		user := User{}
+		err = rows.Scan(&user.username)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(user.username)
 	}
-	fmt.Println(rows)
+
+	err = rows.Err()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func inputHandler(askFor string) string {
@@ -88,7 +136,3 @@ func getDbName() string {
 	dbName := inputHandler("database name")
 	return dbName
 }
-
-// func createDatabase() {
-
-// }
